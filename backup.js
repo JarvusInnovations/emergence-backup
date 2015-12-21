@@ -66,7 +66,7 @@ async.auto({
         });
     },
 
-    makeDirectories: [
+    makeRemoteDirectories: [
         'getHome',
         function(callback, results) {
             winston.info('Creating remote directories...');
@@ -83,7 +83,7 @@ async.auto({
     ],
 
     getLastSnapshot: [
-        'makeDirectories',
+        'makeRemoteDirectories',
         function(callback, results) {
             winston.info('Finding latest snapshot...');
             ssh('ls -1r ~/emergence-sites', function(error, output, info) {
@@ -199,7 +199,7 @@ async.auto({
 
     uploadSql: [
         'getToday',
-        'makeDirectories',
+        'makeRemoteDirectories',
         'backupSqlDatabases',
         function(callback, results) {
             var today = results.getToday,
