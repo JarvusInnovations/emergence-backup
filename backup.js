@@ -70,7 +70,7 @@ async.auto({
         'getHome',
         function(callback, results) {
             winston.info('Creating remote directories...');
-            ssh('mkdir -p ~/emergence-sites/logs ~/emergence-sql/logs', function(error, output, info) {
+            ssh('mkdir -p ~/emergence-sites/logs ~/emergence-services/logs', function(error, output, info) {
                 if (error) return callback(error);
 
                 if (info.code != 0) {
