@@ -15,6 +15,16 @@ var backupServicePath = '/emergence/services/backup',
     logsPath = backupServicePath + '/logs';
 
 
+// verify backup service is configured
+if (
+    !fs.existsSync(backupServicePath) ||
+    !fs.existsSync(configPath) ||
+    !fs.existsSync(privateKeyPath)
+) {
+    throw new Error('Backup service has not been configured yet, run emergence-backup-setup');
+}
+
+
 // configure logger
 if (!fs.existsSync(logsPath)){
     fs.mkdirSync(logsPath);
