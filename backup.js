@@ -31,13 +31,17 @@ var config = JSON.parse(fs.readFileSync(configPath));
 winston.info('Loaded config:', config);
 
 
-//connect to SSH
+// connect to SSH
 winston.info('Creating SSH connection...');
 var ssh = sequest.connect({
     host: config.host,
     username: config.user,
     privateKey: fs.readFileSync(privateKeyPath)
 });
+
+
+// execute backup
+winston.info('Executing backup...');
 
 async.auto({
     getToday: function(callback) {
@@ -144,7 +148,7 @@ async.auto({
             var today = results.getToday,
                 remoteLogPath = 'emergence-sites/logs/' + today + '.gz',
                 snapshotPath = results.initializeSnapshot;
-        
+
             winston.info('Rsyncing snapshot to %s...', snapshotPath);
 
             rsync({
@@ -241,26 +245,26 @@ async.auto({
             });
         }
     ],
-    
+
     checkBackupDirectory: function(callback) {
         if (!fs.existsSync('/emergence/sql-backups')) {
             winston.info('Creating /emergence/sql-backups directory.');
-            
+
             fs.mkdirSync('/emergence/sql-backups');
         }
-        
+
         callback(null, true);
     },
-    
+
     getSqlDatabases:function(callback, results) {
         var dateStamp = results.getToday,
             dayNum = dateStamp.split('-').pop(),
-            
+
             dbUsername = config.database.username,
             dbPassword = config.database.password,
             dbSocket = config.database.socket,
             ignoreDbs = config.database.ignore || ['mysql', 'information_schema', 'performance_schema'],
-            
+
             mysqlCmd = [
                 "mysql",
                 "-u",
@@ -273,9 +277,9 @@ async.auto({
             ],
             databases = [],
             database;
-        
+
         winston.info("Retrieving Databases...");
-        
+
         cp.exec(mysqlCmd.join(' '), function(err, stdout, stderr) {
             if (err) {
                 winston.info('There was an error retrieving a list of databases');
@@ -286,9 +290,9 @@ async.auto({
                 winston.info('Found Databases: %s', databases.join(', '));
                 callback(null, databases.join(','));
             }
-        }); 
+        });
     },
-        
+
     backupSqlDatabases: [
         'getToday',
         'checkBackupDirectory',
@@ -296,16 +300,16 @@ async.auto({
         function(callback, results) {
             var dateStamp = results.getToday,
                 dayNum = dateStamp.split('-').pop(),
-                
+
                 dbUsername = config.database.username,
                 dbPassword = config.database.password,
                 dbSocket = config.database.socket,
                 ignoreDbs = config.database.ignore || ['mysql', 'information_schema', 'performance_schema'],
-                
-                databases = results.getSqlDatabases.split(',');             
-                
+
+                databases = results.getSqlDatabases.split(',');
+
             winston.info("Backing up Sql Databases:", databases);
-            
+
             while (database = databases.shift()) {
                 var filename = (database+"."+dateStamp+".sql.bz2"),
                     backupDir = '/emergence/sql-backups/'+database,
@@ -326,50 +330,50 @@ async.auto({
                         '| bzip2 > ',
                         fullFilename
                     ],
-                    
+
                     backupProcess;
-            
+
                 if (database.match(/^\_/) || ignoreDbs.indexOf(database) !== -1) {
                     winston.info("Skipping DB: %s", database);
                     continue;
                 }
-            
+
                 if (!fs.existsSync(backupDir)) {
                     fs.mkdirSync(backupDir);
                 }
-            
-                
+
+
                 var backupFn = function(callCallback) {
                     var mysqlbackup;
-                    
+
                     mysqlbackup = cp.spawn('sh', ['-c', backupCmdArgs.join(' ')], {stdio: 'inherit'});
 
                     mysqlbackup.on('close', function (code) {
                         if (code !== 0) {
                             console.log('mysqldump process exited with code ' + code);
                         }
-                        
+
                         if (callCallback === true) {
                             callback(null, true);
                         }
-                      
+
                     });
 
                 };
-                
+
                 if (dayNum != '01') {
-                    
+
                     winston.info("Erasing %s.*-%s.sql.bz2", database, dayNum);
                         cp.exec('rm '+backupDir+'/'+database+".*-"+dayNum+".sql.bz2", function(err, stdout, stderr) {
                         if (stderr) {
                             winston.info(stderr);
                         }
-                    }); 
+                    });
                 }
-                
+
                 backupFn(databases.length===1);
-            }       
-        } 
+            }
+        }
     ],
 
 }, function(error, results) {
