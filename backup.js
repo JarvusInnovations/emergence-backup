@@ -207,6 +207,20 @@ async.auto({
         }
     ],
 
+    getLocalMysqlDirectory: function(callback) {
+        var path = backupServicePath + '/mysql';
+
+        fs.exists(path, function(exists) {
+            if (exists) {
+                callback(null, path);
+            } else {
+                fs.mkdir(path, '700', function() {
+                    callback(null, path);
+                });
+            }
+        });
+    },
+
     uploadSql: [
         'getToday',
         'makeRemoteDirectories',
@@ -256,16 +270,6 @@ async.auto({
         }
     ],
 
-    checkBackupDirectory: function(callback) {
-        if (!fs.existsSync('/emergence/sql-backups')) {
-            winston.info('Creating /emergence/sql-backups directory.');
-
-            fs.mkdirSync('/emergence/sql-backups');
-        }
-
-        callback(null, true);
-    },
-
     getSqlDatabases:function(callback, results) {
         var dateStamp = results.getToday,
             dayNum = dateStamp.split('-').pop(),
@@ -305,7 +309,7 @@ async.auto({
 
     backupSqlDatabases: [
         'getToday',
-        'checkBackupDirectory',
+        'getLocalMysqlDirectory',
         'getSqlDatabases',
         function(callback, results) {
             var dateStamp = results.getToday,
