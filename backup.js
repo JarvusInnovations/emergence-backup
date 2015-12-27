@@ -59,9 +59,9 @@ async.auto({
     },
 
     getEmergenceConfig: function(callback) {
-        fs.readFile('/emergence/config.json', 'ascii', function(err, data) {
-            if (err) {
-                return callback(err);
+        fs.readFile('/emergence/config.json', 'ascii', function(error, data) {
+            if (error) {
+                return callback(error);
             }
 
             callback(null, JSON.parse(data));
@@ -268,10 +268,10 @@ async.auto({
             mysqlCmd.push('-e', '"SELECT TABLE_SCHEMA, TABLE_NAME FROM information_schema.tables WHERE TABLE_SCHEMA NOT IN (\''+ignoreSchemas.join('\',\'')+'\')"');
 
             winston.info("Retrieving mysql tables...");
-            child_process.exec(mysqlCmd.join(' '), function(err, stdout, stderr) {
-                if (err) {
+            child_process.exec(mysqlCmd.join(' '), function(error, stdout, stderr) {
+                if (error) {
                     winston.info('There was an error retrieving a list of databases');
-                    return callback(err);
+                    return callback(error);
                 }
 
                 var tables = stdout.trim().split(/\n/).filter(function(line) { return line; }),
@@ -429,7 +429,7 @@ async.auto({
             // if (dayNum != '01') {
 
             //     winston.info("Erasing %s.*-%s.sql.bz2", database, dayNum);
-            //         cp.exec('rm '+backupDir+'/'+database+".*-"+dayNum+".sql.bz2", function(err, stdout, stderr) {
+            //         cp.exec('rm '+backupDir+'/'+database+".*-"+dayNum+".sql.bz2", function(error, stdout, stderr) {
             //         if (stderr) {
             //             winston.info(stderr);
             //         }
