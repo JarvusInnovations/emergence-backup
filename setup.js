@@ -1,6 +1,18 @@
 var winston = require('winston'),
     prompt = require('prompt'),
-    sequest = require('sequest');
+    fs = require('fs'),
+    sequest = require('sequest'),
+    execSync = require('execSync');
+
+// paths
+var backupServicePath = '/emergence/services/backup',
+    configPath = backupServicePath + '/config.json',
+    privateKeyPath = backupServicePath + '/id_rsa';
+
+// ensure backup service isn't already configured
+if (fs.existsSync(backupServicePath)) {
+    throw new Error(backupServicePath + ' already exists');
+}
 
 prompt.start();
 
@@ -15,14 +27,37 @@ prompt.get([{
     hidden: true
 }], function (err, result) {
 
-    winston.info('Creating SSH connection...');
+    winston.info('Creating SSH connection to '+result.host+'...');
     var ssh = sequest.connect(result);
 
     winston.info('Checking home directory...');
     ssh('echo $HOME', function(error, output, info) {
-        winston.info('error:', error);
+        if (error) {
+            winston.error('Failed to connect to backup host', err);
+            ssh.end();
+            return;
+        }
+
         winston.info('output:', output);
         winston.info('info:', info);
+
+        ssh.end();
+
+        winston.info('Creating ' + backupServicePath + '...');
+        fs.mkdirSync(backupServicePath, '700');
+
+        winston.info('Generating ' + privateKeyPath + '...');
+        execSync.exec('ssh-keygen -t rsa -N "" -f ' + privateKeyPath);
+
+        winston.info('Writing config to ' + configPath + '...');
+        fs.writeFileSync(configPath, JSON.stringify({
+            host: result.host,
+            mysql: {
+                ignoreTables: '*.sessions'
+            }
+        }, null, 4));
+
+        fs.chmodSync(configPath, '600');
     });
 });
 
