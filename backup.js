@@ -71,7 +71,9 @@ async.auto({
     getRemoteHome: function(callback) {
         winston.info('Checking home directory...');
         ssh('echo $HOME', function(error, output, info) {
-            if (error) return callback(error);
+            if (error) {
+                return callback(error);
+            }
 
             var home = output.trim();
 
@@ -93,7 +95,9 @@ async.auto({
 
             winston.info('Creating remote directory %s...', snapshotsRootPath);
             ssh('mkdir -p ' + snapshotsRootPath + '/logs && chmod -R 700 ' + snapshotsRootPath, function(error, output, info) {
-                if (error) return callback(error);
+                if (error) {
+                    return callback(error);
+                }
 
                 if (info.code != 0) {
                     return callback('Failed to create directory: ' + snapshotsRootPath);
@@ -111,7 +115,9 @@ async.auto({
 
             winston.info('Finding latest snapshot...');
             ssh('ls -1r ' + snapshotsRootPath, function(error, output, info) {
-                if (error) return callback(error);
+                if (error) {
+                    return callback(error);
+                }
 
                 output = output.trim();
 
@@ -202,7 +208,9 @@ async.auto({
                     '--compress'
                 ]
             }, function(error, stdout, stderr, cmd) {
-                if (error) return callback(error);
+                if (error) {
+                    return callback(error);
+                }
 
                 stdout = (stdout || '').trim();
                 winston.info('Snapshot rsync finished, items changed:', stdout ? stdout.split(/\n/).length : 0);
@@ -253,7 +261,7 @@ async.auto({
             mysqlCmd.push('-B'); // TSV output
             mysqlCmd.push('-s'); // silent
 
-            mysqlCmd.push('-u', serviceConfig.managerUser);1
+            mysqlCmd.push('-u', serviceConfig.managerUser);
             mysqlCmd.push('-p' + serviceConfig.managerPassword);
             mysqlCmd.push('-S', '/emergence/services/run/mysqld/mysqld.sock');
 
@@ -307,7 +315,7 @@ async.auto({
             mysqldumpCmd.push('--single-transaction');
             mysqldumpCmd.push('--quick');
 
-            mysqldumpCmd.push('-u', serviceConfig.managerUser);1
+            mysqldumpCmd.push('-u', serviceConfig.managerUser);
             mysqldumpCmd.push('-p' + serviceConfig.managerPassword);
             mysqldumpCmd.push('-S', '/emergence/services/run/mysqld/mysqld.sock');
 
@@ -342,7 +350,9 @@ async.auto({
 
             winston.info('Creating remote directory %s...', mysqlRootPath);
             ssh('mkdir -p ' + mysqlRootPath + '/logs && chmod -R 700 ' + mysqlRootPath, function(error, output, info) {
-                if (error) return callback(error);
+                if (error) {
+                    return callback(error);
+                }
 
                 if (info.code != 0) {
                     return callback('Failed to create directory: ' + mysqlRootPath);
@@ -384,7 +394,9 @@ async.auto({
                     '--chmod=-rwx,u+Xrw'
                 ]
             }, function(error, stdout, stderr, cmd) {
-                if (error) return callback(error);
+                if (error) {
+                    return callback(error);
+                }
 
                 stdout = (stdout || '').trim();
                 winston.info('SQL rsync finished, items changed:', stdout ? stdout.split(/\n/).length : 0);
