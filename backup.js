@@ -5,8 +5,8 @@ var fs = require('fs'),
     async = require('async'),
     winston = require('winston'),
     sequest = require('sequest'),
-    rsync = require('rsyncwrapper').rsync;
-
+    rsync = require('rsyncwrapper').rsync,
+    child_process = require('child_process');
 
 // paths
 var backupServicePath = '/emergence/services/backup',
@@ -15,9 +15,19 @@ var backupServicePath = '/emergence/services/backup',
     logsPath = backupServicePath + '/logs';
 
 
+// verify backup service is configured
+if (
+    !fs.existsSync(backupServicePath) ||
+    !fs.existsSync(configPath) ||
+    !fs.existsSync(privateKeyPath)
+) {
+    throw new Error('Backup service has not been configured yet, run emergence-backup-setup');
+}
+
+
 // configure logger
 if (!fs.existsSync(logsPath)){
-    fs.mkdirSync(logsPath);
+    fs.mkdirSync(logsPath, '700');
 }
 
 winston.add(winston.transports.DailyRotateFile, {
@@ -40,7 +50,7 @@ var ssh = sequest.connect({
 });
 
 
-
+// execute backup
 winston.info('Executing backup...');
 
 async.auto({
@@ -48,10 +58,22 @@ async.auto({
         callback(null, (new Date()).toISOString().split('T')[0]);
     },
 
-    getHome: function(callback) {
+    getEmergenceConfig: function(callback) {
+        fs.readFile('/emergence/config.json', 'ascii', function(error, data) {
+            if (error) {
+                return callback(error);
+            }
+
+            callback(null, JSON.parse(data));
+        });
+    },
+
+    getRemoteHome: function(callback) {
         winston.info('Checking home directory...');
         ssh('echo $HOME', function(error, output, info) {
-            if (error) return callback(error);
+            if (error) {
+                return callback(error);
+            }
 
             var home = output.trim();
 
@@ -66,28 +88,36 @@ async.auto({
         });
     },
 
-    makeDirectories: [
-        'getHome',
+    getRemoteSnapshotDirectory: [
+        'getRemoteHome',
         function(callback, results) {
-            winston.info('Creating remote directories...');
-            ssh('mkdir -p ~/emergence-sites/logs ~/emergence-sql/logs', function(error, output, info) {
-                if (error) return callback(error);
+            var snapshotsRootPath = results.getRemoteHome + '/emergence-sites';
 
-                if (info.code != 0) {
-                    return callback('Failed to create directories');
+            winston.info('Creating remote directory %s...', snapshotsRootPath);
+            ssh('mkdir -p ' + snapshotsRootPath + '/logs && chmod -R 700 ' + snapshotsRootPath, function(error, output, info) {
+                if (error) {
+                    return callback(error);
                 }
 
-                callback(null, true);
+                if (info.code != 0) {
+                    return callback('Failed to create directory: ' + snapshotsRootPath);
+                }
+
+                callback(null, snapshotsRootPath);
             });
         }
     ],
 
     getLastSnapshot: [
-        'makeDirectories',
+        'getRemoteSnapshotDirectory',
         function(callback, results) {
+            var snapshotsRootPath = results.getRemoteSnapshotDirectory;
+
             winston.info('Finding latest snapshot...');
-            ssh('ls -1r ~/emergence-sites', function(error, output, info) {
-                if (error) return callback(error);
+            ssh('ls -1r ' + snapshotsRootPath, function(error, output, info) {
+                if (error) {
+                    return callback(error);
+                }
 
                 output = output.trim();
 
@@ -117,12 +147,14 @@ async.auto({
 
     initializeSnapshot: [
         'getToday',
+        'getRemoteSnapshotDirectory',
         'getLastSnapshot',
         function(callback, results) {
-            var lastSnapshot = results.getLastSnapshot,
-                lastSnapshotPath = lastSnapshot && '~/emergence-sites/' + lastSnapshot,
+            var snapshotsRootPath = results.getRemoteSnapshotDirectory,
+                lastSnapshot = results.getLastSnapshot,
+                lastSnapshotPath = lastSnapshot && snapshotsRootPath + '/' + lastSnapshot,
                 today = results.getToday,
-                snapshotPath = '~/emergence-sites/' + today;
+                snapshotPath = snapshotsRootPath + '/' + today;
 
             if (!lastSnapshot) {
                 winston.info('Starting new snapshot at %s...', snapshotPath);
@@ -143,12 +175,13 @@ async.auto({
 
     uploadSnapshot: [
         'getToday',
+        'getRemoteSnapshotDirectory',
         'initializeSnapshot',
         function(callback, results) {
             var today = results.getToday,
-                remoteLogPath = 'emergence-sites/logs/' + today + '.gz',
+                remoteLogPath = results.getRemoteSnapshotDirectory + '/logs/' + today + '.gz',
                 snapshotPath = results.initializeSnapshot;
-            
+
             winston.info('Rsyncing snapshot to %s...', snapshotPath);
 
             rsync({
@@ -175,7 +208,9 @@ async.auto({
                     '--compress'
                 ]
             }, function(error, stdout, stderr, cmd) {
-                if (error) return callback(error);
+                if (error) {
+                    return callback(error);
+                }
 
                 stdout = (stdout || '').trim();
                 winston.info('Snapshot rsync finished, items changed:', stdout ? stdout.split(/\n/).length : 0);
@@ -197,22 +232,158 @@ async.auto({
         }
     ],
 
-    uploadSql: [
+    getLocalMysqlDirectory: function(callback) {
+        var path = backupServicePath + '/mysql';
+
+        fs.exists(path, function(exists) {
+            if (exists) {
+                callback(null, path);
+            } else {
+                fs.mkdir(path, '700', function() {
+                    callback(null, path);
+                });
+            }
+        });
+    },
+
+    getMysqlTables: [
+        'getEmergenceConfig',
+        function(callback, results) {
+            var serviceConfig = results.getEmergenceConfig.services.plugins.sql,
+                ignoreSchemas = ['mysql', 'information_schema', 'performance_schema'],
+                mysqlCmd = ['mysql'];
+
+            if (config.mysql && config.mysql.ignoreSchemas) {
+                winston.info('Ignoring additional mysql schemas:', config.mysql.ignoreSchemas);
+                ignoreSchemas.push.apply(ignoreSchemas, config.mysql.ignoreSchemas);
+            }
+
+            mysqlCmd.push('-B'); // TSV output
+            mysqlCmd.push('-s'); // silent
+
+            mysqlCmd.push('-u', serviceConfig.managerUser);
+            mysqlCmd.push('-p' + serviceConfig.managerPassword);
+            mysqlCmd.push('-S', '/emergence/services/run/mysqld/mysqld.sock');
+
+            mysqlCmd.push('-e', '"SELECT TABLE_SCHEMA, TABLE_NAME FROM information_schema.tables WHERE TABLE_SCHEMA NOT IN (\''+ignoreSchemas.join('\',\'')+'\')"');
+
+            winston.info("Retrieving mysql tables...");
+            child_process.exec(mysqlCmd.join(' '), function(error, stdout, stderr) {
+                if (error) {
+                    winston.info('There was an error retrieving a list of databases');
+                    return callback(error);
+                }
+
+                var tables = stdout.trim().split(/\n/).filter(function(line) { return line; }),
+                    tablesLength = tables.length,
+                    i = 0, tableBits;
+
+                for (; i < tablesLength; i++) {
+                    tableBits = tables[i].split(/\t/);
+
+                    tables[i] = {
+                        schema: tableBits[0],
+                        name: tableBits[1]
+                    };
+                }
+
+                winston.info('Found %s mysql tables', tablesLength);
+                callback(null, tables);
+            });
+        }
+    ],
+
+    dumpMysqlTables: [
         'getToday',
-        'makeDirectories',
+        'getLocalMysqlDirectory',
+        'getMysqlTables',
+        function(callback, results) {
+            var todayPath = results.getLocalMysqlDirectory + '/' + results.getToday,
+                serviceConfig = results.getEmergenceConfig.services.plugins.sql,
+                ignoreTables = (config.mysql && config.mysql.ignoreTables) || [],
+                mysqldumpCmd = ['mysqldump'],
+                mysqldumpSuffix, schemaPath;
+
+            if (!fs.existsSync(todayPath)) {
+                fs.mkdirSync(todayPath, '700');
+            }
+
+            winston.info('Dumping mysql to %s', todayPath);
+
+            mysqldumpCmd.push('--opt');
+            mysqldumpCmd.push('--force');
+            mysqldumpCmd.push('--single-transaction');
+            mysqldumpCmd.push('--quick');
+
+            mysqldumpCmd.push('-u', serviceConfig.managerUser);
+            mysqldumpCmd.push('-p' + serviceConfig.managerPassword);
+            mysqldumpCmd.push('-S', '/emergence/services/run/mysqld/mysqld.sock');
+
+            async.eachSeries(results.getMysqlTables, function(table, callback) {
+                if (
+                    ignoreTables.indexOf('*.'+table.name) >= 0 ||
+                    ignoreTables.indexOf(table.schema+'.'+table.name) >= 0
+                ) {
+                    return callback();
+                }
+
+                mysqldumpSuffix = [table.schema, table.name];
+                mysqldumpSuffix.push('|', 'bzip2');
+
+                schemaPath = todayPath + '/' + table.schema;
+                if (!fs.existsSync(schemaPath)) {
+                    fs.mkdirSync(schemaPath, '700');
+                }
+
+                mysqldumpSuffix.push('>', schemaPath + '/' + table.name + '.sql.bz2');
+
+                winston.info('Dumping mysql table %s.%s', table.schema, table.name);
+                child_process.exec(mysqldumpCmd.concat(mysqldumpSuffix).join(' '), callback);
+            }, callback);
+        }
+    ],
+
+    getRemoteMysqlDirectory: [
+        'getRemoteHome',
+        function(callback, results) {
+            var mysqlRootPath = results.getRemoteHome + '/emergence-services/mysql';
+
+            winston.info('Creating remote directory %s...', mysqlRootPath);
+            ssh('mkdir -p ' + mysqlRootPath + '/logs && chmod -R 700 ' + mysqlRootPath, function(error, output, info) {
+                if (error) {
+                    return callback(error);
+                }
+
+                if (info.code != 0) {
+                    return callback('Failed to create directory: ' + mysqlRootPath);
+                }
+
+                callback(null, mysqlRootPath);
+            });
+        }
+    ],
+
+    uploadMysqlTables: [
+        'getToday',
+        'getLocalMysqlDirectory',
+        'getRemoteMysqlDirectory',
+        'dumpMysqlTables',
         function(callback, results) {
             var today = results.getToday,
-                remoteLogPath = 'emergence-sql/logs/' + today + '.gz';
+                remoteLogPath = results.getRemoteMysqlDirectory + '/logs/' + today + '.gz';
 
-            winston.info('Rsyncing SQL backups to server...');
+            winston.info('Rsyncing SQL backups to server...', {
+                src: results.getLocalMysqlDirectory,
+                dest: results.getRemoteMysqlDirectory
+            });
 
             rsync({
                 host: config.user + '@' + config.host,
                 privateKey: privateKeyPath,
                 //noExec: true,
 
-                src: '/emergence/sql-backups/',
-                dest: '~/emergence-sql',
+                src: results.getLocalMysqlDirectory + '/',
+                dest: results.getRemoteMysqlDirectory,
 
                 //dryRun: true,
                 recursive: true,
@@ -220,10 +391,12 @@ async.auto({
                 args: [
                     '-a',
                     '-i',
-                    '--chmod=-rwx,ug+Xr,u+w'
+                    '--chmod=-rwx,u+Xrw'
                 ]
             }, function(error, stdout, stderr, cmd) {
-                if (error) return callback(error);
+                if (error) {
+                    return callback(error);
+                }
 
                 stdout = (stdout || '').trim();
                 winston.info('SQL rsync finished, items changed:', stdout ? stdout.split(/\n/).length : 0);
@@ -243,6 +416,26 @@ async.auto({
                 gzip.end(stdout);
             });
         }
+    ],
+
+    pruneMysqlTables: [
+        'getToday',
+        'getLocalMysqlDirectory',
+        'uploadMysqlTables',
+        function(callback, results) {
+            winston.warn('TODO: prune mysql tables');
+            callback();
+
+            // if (dayNum != '01') {
+
+            //     winston.info("Erasing %s.*-%s.sql.bz2", database, dayNum);
+            //         cp.exec('rm '+backupDir+'/'+database+".*-"+dayNum+".sql.bz2", function(error, stdout, stderr) {
+            //         if (stderr) {
+            //             winston.info(stderr);
+            //         }
+            //     });
+            // }
+        }
     ]
 
 }, function(error, results) {
@@ -250,6 +443,6 @@ async.auto({
         winston.error('Backup failed:', error);
     }
 
-    winston.info('Backup complete:', results);
+    winston.info('Backup complete');
     ssh.end();
 });
