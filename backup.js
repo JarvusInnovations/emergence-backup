@@ -443,7 +443,6 @@ async.auto({
         winston.error('Backup failed:', error);
     }
 
-    // TODO: don't output results since it can contain secure data now
-    winston.info('Backup complete:', JSON.stringify(results, null, 4));
+    winston.info('Backup complete');
     ssh.end();
 });
