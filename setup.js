@@ -38,7 +38,11 @@ prompt.get([{
     name: 'password',
     description: 'Superuser password for backup server',
     hidden: true
-}], function (err, result) {
+}], function (error, result) {
+    if (error) {
+        winston.error('Prompt failed:', error.message);
+        process.exit(1);
+    }
 
     winston.info('Creating SSH connection to '+result.host+'...');
     var ssh = sequest.connect(result);
