@@ -124,6 +124,15 @@ prompt.get([{
 
                 fs.chmodSync(configPath, '600');
 
+                winston.info('Verifying connection to %s and accepting key...', result.host);
+                shell.exec([
+                    'ssh',
+                        '-o StrictHostKeyChecking=no',
+                        '-i', privateKeyPath,
+                        result.backup_username + '@' + result.host,
+                    'exit'
+                ].join(' '));
+
                 winston.info('Installing cron job...');
                 lib.writeCron(null, null, function(error, hour, minute) {
                     if (error) {
