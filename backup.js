@@ -301,6 +301,7 @@ async.auto({
             var todayPath = results.getLocalMysqlDirectory + '/' + results.getToday,
                 serviceConfig = results.getEmergenceConfig.services.plugins.sql,
                 ignoreTables = (config.mysql && config.mysql.ignoreTables) || [],
+                tablesCount = 0,
                 mysqldumpCmd = ['mysqldump'],
                 mysqldumpSuffix, schemaPath;
 
@@ -308,7 +309,7 @@ async.auto({
                 fs.mkdirSync(todayPath, '700');
             }
 
-            winston.info('Dumping mysql to %s', todayPath);
+            winston.info('Dumping mysql to %s...', todayPath);
 
             mysqldumpCmd.push('--opt');
             mysqldumpCmd.push('--force');
@@ -337,9 +338,15 @@ async.auto({
 
                 mysqldumpSuffix.push('>', schemaPath + '/' + table.name + '.sql.bz2');
 
-                winston.info('Dumping mysql table %s.%s', table.schema, table.name);
                 child_process.exec(mysqldumpCmd.concat(mysqldumpSuffix).join(' '), callback);
-            }, callback);
+                tablesCount++;
+            }, function(error) {
+                if (error) {
+                    return callback(error);
+                }
+
+                winston.info('Dumped %d mysql tables', tablesCount);
+            });
         }
     ],
 
