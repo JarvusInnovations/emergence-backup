@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 var winston = require('winston'),
     prompt = require('prompt'),
     fs = require('fs'),
