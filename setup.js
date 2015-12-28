@@ -3,7 +3,8 @@ var winston = require('winston'),
     fs = require('fs'),
     os = require('os'),
     sequest = require('sequest'),
-    execSync = require('execSync');
+    execSync = require('execSync'),
+    lib = require('./lib');
 
 // paths
 var backupServicePath = '/emergence/services/backup',
@@ -105,6 +106,16 @@ prompt.get([{
                 }, null, 4));
 
                 fs.chmodSync(configPath, '600');
+
+                winston.info('Installing cron job...');
+                lib.writeCron(null, null, function(error, hour, minute) {
+                    if (error) {
+                        winston.error('Could not write cron job:', error);
+                        process.exit(5);
+                    }
+
+                    winston.info('Cron job scheduled for %d:%d', hour, minute);
+                });
             });
         });
     });
