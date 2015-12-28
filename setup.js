@@ -14,10 +14,19 @@ var backupServicePath = '/emergence/services/backup',
     privateKeyPath = backupServicePath + '/id_rsa',
     publicKeyPath = backupServicePath + '/id_rsa.pub';
 
+// error codes
+const ERROR_MUST_BE_ROOT = 1,
+      ERROR_ALREADY_CONFIGURED = 2,
+      ERROR_CANCELLED = 3,
+      ERROR_BACKUP_HOST_CONNECTION_FAILED = 4,
+      ERROR_BACKUP_HOST_READ_CONFIG_FAILED = 5,
+      ERROR_BACKUP_HOST_USER_EXISTS = 6,
+      ERROR_WRITE_CRON_FAILED = 7;
+
 // ensure backup service isn't already configured
 if (fs.existsSync(backupServicePath)) {
     winston.error(backupServicePath + ' already exists');
-    process.exit(1);
+    process.exit(ERROR_ALREADY_CONFIGURED);
 }
 
 // TODO: use async.auto?
