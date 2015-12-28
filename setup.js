@@ -5,7 +5,7 @@ var winston = require('winston'),
     fs = require('fs'),
     os = require('os'),
     sequest = require('sequest'),
-    execSync = require('execSync'),
+    shell = require('shelljs'),
     lib = require('./lib');
 
 // paths
@@ -96,7 +96,7 @@ prompt.get([{
             fs.mkdirSync(backupServicePath, '700');
 
             winston.info('Generating ' + privateKeyPath + '...');
-            execSync.exec('ssh-keygen -t rsa -N "" -f ' + privateKeyPath);
+            shell.exec('ssh-keygen -t rsa -N "" -f ' + privateKeyPath);
 
             var username = result.backup_username,
                 home = serverConfig.homePrefix + '/' + username,

@@ -7,7 +7,7 @@
     "async": "^1.2.1",
     "sequest": "^0.8.0",
     "rsyncwrapper": "^0.4.3",
-    "execSync": "^1.0.2",
+    "shelljs": "^0.5.3",
     "prompt": "^0.2.14"
   },
   "name": "emergence-backup",
