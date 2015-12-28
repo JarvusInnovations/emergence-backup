@@ -1,6 +1,7 @@
 var winston = require('winston'),
     prompt = require('prompt'),
     fs = require('fs'),
+    os = require('os'),
     sequest = require('sequest'),
     execSync = require('execSync');
 
@@ -11,35 +12,47 @@ var backupServicePath = '/emergence/services/backup',
 
 // ensure backup service isn't already configured
 if (fs.existsSync(backupServicePath)) {
-    throw new Error(backupServicePath + ' already exists');
+    winston.error(backupServicePath + ' already exists');
+    process.exit(1);
 }
 
 prompt.start();
 
 prompt.get([{
+    name: 'backup_username',
+    description: 'Username to create for this host on the backup server',
+    required: true,
+    default: os.hostname()
+},{
     name: 'host',
+    description: 'Hostname for backup server',
     required: true
-}, {
+},{
     name: 'username',
+    description: 'Superuser username for backup server',
     required: true
-}, {
+},{
     name: 'password',
+    description: 'Superuser password for backup server',
     hidden: true
 }], function (err, result) {
 
     winston.info('Creating SSH connection to '+result.host+'...');
     var ssh = sequest.connect(result);
 
-    winston.info('Checking home directory...');
-    ssh('echo $HOME', function(error, output, info) {
+    winston.info('Checking if user exists...');
+    ssh('getent passwd ' + result.backup_username + '> /dev/null; echo $?', function(error, output, info) {
         if (error) {
-            winston.error('Failed to connect to backup host', err);
+            winston.error('Failed to connect to backup host', error);
             ssh.end();
-            return;
+            process.exit(2);
         }
 
-        winston.info('output:', output);
-        winston.info('info:', info);
+        if (output.trim() == '0') {
+            winston.error('Username "%s" already exists on %s', result.backup_username, result.host);
+            ssh.end();
+            process.exit(3);
+        }
 
         ssh.end();
 
