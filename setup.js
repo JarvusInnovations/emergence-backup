@@ -23,6 +23,12 @@ const ERROR_MUST_BE_ROOT = 1,
       ERROR_BACKUP_HOST_USER_EXISTS = 6,
       ERROR_WRITE_CRON_FAILED = 7;
 
+// ensure script is run as root
+if (process.getuid() != 0) {
+    winston.error('Must be run as root');
+    process.exit(ERROR_MUST_BE_ROOT);
+}
+
 // ensure backup service isn't already configured
 if (fs.existsSync(backupServicePath)) {
     winston.error(backupServicePath + ' already exists');
@@ -53,7 +59,7 @@ prompt.get([{
 }], function (error, result) {
     if (error) {
         winston.error('Prompt failed:', error.message);
-        process.exit(1);
+        process.exit(ERROR_CANCELLED);
     }
 
     winston.info('Creating SSH connection to '+result.host+'...');
@@ -66,13 +72,13 @@ prompt.get([{
         if (error) {
             winston.error('Failed to connect to backup host', error);
             ssh.end();
-            process.exit(2);
+            process.exit(ERROR_BACKUP_HOST_CONNECTION_FAILED);
         }
 
         if (!output.trim() || !(serverConfig = JSON.parse(output))) {
             winston.error('Failed to read /etc/emergence-backup.json on backup host', error);
             ssh.end();
-            process.exit(3);
+            process.exit(ERROR_BACKUP_HOST_READ_CONFIG_FAILED);
         }
 
         winston.info('serverConfig', serverConfig);
@@ -83,7 +89,7 @@ prompt.get([{
             if (output.trim() == '0') {
                 winston.error('Username "%s" already exists on %s', result.backup_username, result.host);
                 ssh.end();
-                process.exit(4);
+                process.exit(ERROR_BACKUP_HOST_USER_EXISTS);
             }
 
             winston.info('Creating ' + backupServicePath + '...');
@@ -122,7 +128,7 @@ prompt.get([{
                 lib.writeCron(null, null, function(error, hour, minute) {
                     if (error) {
                         winston.error('Could not write cron job:', error);
-                        process.exit(5);
+                        process.exit(ERROR_WRITE_CRON_FAILED);
                     }
 
                     winston.info('Cron job scheduled for %d:%d', hour, minute);
