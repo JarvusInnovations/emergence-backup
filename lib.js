@@ -7,7 +7,7 @@ exports.writeCron = function(hour, minute, callback) {
 
     fs.writeFile(
         '/etc/cron.d/emergence-backup',
-        util.format('%d %d\t* * *\troot\temergence-backup\n', minute, hour),
+        util.format('%d %d\t* * *\troot\t%s/backup.js > /dev/null\n', minute, hour, __dirname),
         'ascii',
         function(error) {
             if (error) {
