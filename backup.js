@@ -398,7 +398,8 @@ async.auto({
                 args: [
                     '-a',
                     '-i',
-                    '--chmod=-rwx,u+Xrw'
+                    '--chmod=-rwx,u+Xrw',
+                    '--ignore-existing'
                 ]
             }, function(error, stdout, stderr, cmd) {
                 if (error) {
