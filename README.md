@@ -3,8 +3,8 @@
 `emergence-backup` runs nightly on the machine you want to backup and uploads snapshots via SSH to a remote disk.
 
 ## Prerequisites
-- Emergence setup and running on a server
-- A remote backup server with ample disk space and an SSH login to it with `sudo` access
+- Emergence setup and running on a server (the **backup target**)
+- A remote backup server with ample disk space and an SSH login to it with `sudo` access (the **backup server**)
 
 ## Initial setup of backup server
 If this is the first time you're using a backup server with `emergence-backup`, you'll need to create a configuration file on it that specifies what directory to use for backups. A shell account will be created for each machine being backed up and this directory will serve as the root for their home directories:
