@@ -1,70 +1,34 @@
 # emergence-backup Installation
 
-### On target machine:
-```
-sudo mkdir /emergence/services/backup
-sudo ssh-keygen -f /emergence/services/backup/id_rsa -t rsa -N ''
+`emergence-backup` runs nightly on the machine you want to backup and uploads snapshots via SSH to a remote disk.
 
-sudo npm install -g git+https://github.com/JarvusInnovations/emergence-backup.git
-sudo vim /emergence/services/backup/config.json
-```
-### config.json
+## Prerequisites
+- Emergence setup and running on a server
+- A remote backup server with ample disk space and an SSH login to it with `sudo` access
 
-```
+## Initial setup of backup server
+If this is the first time you're using a backup server with `emergence-backup`, you'll need to create a configuration file on it that specifies what directory to use for backups. A shell account will be created for each machine being backed up and this directory will serve as the root for their home directories:
+
+### `/etc/emergence-backup.json`
+```json
 {
-    "host": "example.com",
-    "user": "siteuser",
-    "database": {
-        "username": "backup",
-        "password": "backup_password",
-        "socket" : "/emergence/services/run/mysqld/mysqld.sock",
-        "ignore" : [
-            "mysql", "information_schema", "performance_schema"
-        ]
-    }
+	"homePrefix": "/mnt/emergence-backup"
 }
 ```
 
-### On backup machine
+## Initial setup of backup target
+On each machine you want to backup:
 
-```
-sudo /root/create-backup-host.sh siteuser
-sudo vim /mnt/emergence-backup/siteuser/.ssh/authorized_keys
-```
+1. Install `emergence-backup`:
 
-Paste contents of id_rsa.pub output from last command on target machine
+    `npm install -g https://github.com/JarvusInnovations/emergence-backup.git`
 
-### Back on target machine:
+2. Complete setup wizard to create account on backup server and install cron job:
 
-Verify ssh can connect with the key
+    `sudo emergence-backup-setup`
 
-```
-sudo ssh -i /emergence/services/backup/id_rsa username@example.com
-```
+3. Manually trigger initial backup to verify setup:
 
-# sql-backup Installation 
+    `sudo emergence-backup`
 
-### Create mysql database user
-
-```
-mysql>CREATE USER 'backup'@'localhost' IDENTIFIED BY 'CREATEPASSWORD';
-mysql>GRANT SELECT, LOCK TABLES, SHOW VIEW ON *.* TO 'backup'@'localhost';
-```
-
-Now place password you used to create the backup mysql user to the config file (/emergence/services/backup/config.json)
-
-## Update Nightly Cronjob
-
-*This step is only necessary if you aren't using the nightly-backup cronjob as it runs the followng two in succession.
-
-Update cron.d to run both the nightly backup and the emergence-backup daily. Stagger the first two numbers (ie. 5:05 AM) relative to the backup site so all the backups aren't running at the same time. 
-
-````
-5 5     * * *   root    /usr/local/bin/emergence-backup
-````
-
-## Manually Run Backup
-
-```
-sudo emergence-backup
-```
+Step 2 installed a cron job under `/etc/cron.d/emergence-backup` with a random late night time. Feel free to edit to adjust the time.
