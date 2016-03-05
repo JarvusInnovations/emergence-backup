@@ -21,7 +21,7 @@ On each machine you want to backup:
 
 1. Install `emergence-backup`:
 
-    `npm install -g https://github.com/JarvusInnovations/emergence-backup.git`
+    `npm install -g git-https://github.com/JarvusInnovations/emergence-backup.git`
 
 2. Complete setup wizard to create account on backup server and install cron job:
 
