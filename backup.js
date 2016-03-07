@@ -254,6 +254,10 @@ async.auto({
                 mysqlCmd = ['mysql'];
 
             if (config.mysql && config.mysql.ignoreSchemas) {
+                if (typeof config.mysql.ignoreSchemas == 'string') {
+                    config.mysql.ignoreSchemas = [config.mysql.ignoreSchemas];
+                }
+
                 winston.info('Ignoring additional mysql schemas:', config.mysql.ignoreSchemas);
                 ignoreSchemas.push.apply(ignoreSchemas, config.mysql.ignoreSchemas);
             }
@@ -307,6 +311,10 @@ async.auto({
 
             if (!fs.existsSync(todayPath)) {
                 fs.mkdirSync(todayPath, '700');
+            }
+
+            if (typeof ignoreTables == 'string') {
+                ignoreTables = [ignoreTables];
             }
 
             winston.info('Dumping mysql to %s...', todayPath);
