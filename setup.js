@@ -118,7 +118,7 @@ prompt.get([{
                     host: result.host,
                     user: username,
                     mysql: {
-                        ignoreTables: '*.sessions'
+                        ignoreTables: ['*.sessions']
                     }
                 }, null, 4));
 
