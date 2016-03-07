@@ -354,6 +354,7 @@ async.auto({
                 }
 
                 winston.info('Dumped %d mysql tables', tablesCount);
+                callback(null, tablesCount);
             });
         }
     ],
