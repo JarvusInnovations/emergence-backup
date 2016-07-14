@@ -173,10 +173,33 @@ async.auto({
         }
     ],
 
+    measureSnapshotBefore: [
+        'getToday',
+        'getLastSnapshot',
+        'initializeSnapshot',
+        function(callback, results) {
+            if (results.getLastSnapshot != results.getToday) {
+                return callback(null, null);
+            }
+
+            winston.info('Measuring current snapshot before updating...');
+            ssh(['du -s', results.initializeSnapshot].join(' '), function(error, output, info) {
+                if (error) {
+                    return callback(error);
+                }
+
+                var bytes = parseInt(output.trim().split('\t')[0]);
+                winston.info('Current snapshot is %d bytes before updating', bytes);
+                callback(null, bytes);
+            });
+        }
+    ],
+
     uploadSnapshot: [
         'getToday',
         'getRemoteSnapshotDirectory',
         'initializeSnapshot',
+        'measureSnapshotBefore',
         function(callback, results) {
             var today = results.getToday,
                 remoteLogPath = results.getRemoteSnapshotDirectory + '/logs/' + today + '.gz',
@@ -220,14 +243,55 @@ async.auto({
                 var remoteLog = ssh.put(remoteLogPath),
                     gzip = zlib.createGzip();
 
-                winston.info('Writing rsync log to %s...', remoteLogPath);
+                winston.info('Writing snapshot rsync log to %s...', remoteLogPath);
 
                 gzip.pipe(remoteLog).on('close', function() {
-                    winston.info('Saved remote log to %s', remoteLogPath);
+                    winston.info('Saved snapshot remote log to %s', remoteLogPath);
                     callback(null, true);
                 });
 
                 gzip.end(stdout);
+            });
+        }
+    ],
+
+    measureSnapshotAfter: [
+        'getRemoteSnapshotDirectory',
+        'getLastSnapshot',
+        'initializeSnapshot',
+        'measureSnapshotBefore',
+        'uploadSnapshot',
+        function(callback, results) {
+            var command = [],
+                result = {
+                    total: null,
+                    increment: null
+                };
+
+            command.push('du -s', results.initializeSnapshot);
+
+            if (!results.measureSnapshotBefore) {
+                command.push(
+                    '&&',
+                    'du -s',
+                    results.getRemoteSnapshotDirectory + '/' + results.getLastSnapshot,
+                    results.initializeSnapshot
+                );
+            }
+
+            winston.info('Measuring current snapshot...');
+            ssh(command.join(' '), function(error, output, info) {
+                output = output.trim().split('\n');
+                result.total = output[0].split('\t')[0];
+
+                if (results.measureSnapshotBefore) {
+                    result.increment = result.total - results.measureSnapshotBefore;
+                } else {
+                    result.increment = output[2].split('\t')[0];
+                }
+
+                winston.info('Finished measuring:', result);
+                callback(null, result);
             });
         }
     ],
@@ -346,6 +410,7 @@ async.auto({
                 }
 
                 winston.info('Dumped %d mysql tables', tablesCount);
+                callback(null, tablesCount);
             });
         }
     ],
@@ -413,10 +478,10 @@ async.auto({
                 var remoteLog = ssh.put(remoteLogPath),
                     gzip = zlib.createGzip();
 
-                winston.info('Writing rsync log to %s...', remoteLogPath);
+                winston.info('Writing mysql rsync log to %s...', remoteLogPath);
 
                 gzip.pipe(remoteLog).on('close', function() {
-                    winston.info('Saved remote log to %s', remoteLogPath);
+                    winston.info('Saved mysql remote log to %s', remoteLogPath);
                     callback(null, true);
                 });
 
@@ -442,6 +507,40 @@ async.auto({
             //         }
             //     });
             // }
+        }
+    ],
+
+    measureDisk: [
+        'getRemoteHome',
+        'uploadSnapshot',
+        'uploadMysqlTables',
+        'pruneMysqlTables',
+        function(callback, results) {
+            winston.info('Measuring disk space...');
+
+            ssh('df ' + results.getRemoteHome, function(error, output, info) {
+                output = output.trim().split('\n')[1].split(/\s+/);
+                winston.info('Finished measuring: ', output);
+                callback(null, {
+                    filesystem: output[0],
+                    size: output[1],
+                    used: output[2]
+                });
+            });
+        }
+    ],
+
+    postReport: [
+        'getRemoteHome',
+        'measureSnapshotAfter',
+        'measureDisk',
+        function(callback, results) {
+            winston.info('POSTing report', {
+                measureSnapshotAfter: results.measureSnapshotAfter,
+                measureDisk: results.measureDisk,
+                getRemoteHome: results.getRemoteHome
+            });
+            callback();
         }
     ]
 
