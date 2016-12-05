@@ -94,7 +94,7 @@ async.auto({
             var snapshotsRootPath = results.getRemoteHome + '/emergence-sites';
 
             winston.info('Creating remote directory %s...', snapshotsRootPath);
-            ssh('mkdir -p ' + snapshotsRootPath + '/logs && chmod -R 700 ' + snapshotsRootPath, function(error, output, info) {
+            ssh('SNAPSHOTS_PATH=' + snapshotsRootPath + '; if [ ! -d $SNAPSHOTS_PATH ]; then mkdir -p $SNAPSHOTS_PATH && chmod -R 700 $SNAPSHOTS_PATH; fi && if [ ! -d $SNAPSHOTS_PATH/logs ]; then mkdir -p $SNAPSHOTS_PATH/logs && chmod -R 700 $SNAPSHOTS_PATH/logs; fi;', function(error, output, info) {
                 if (error) {
                     return callback(error);
                 }
