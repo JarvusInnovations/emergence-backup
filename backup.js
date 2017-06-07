@@ -440,18 +440,30 @@ async.auto({
         'getLocalMysqlDirectory',
         'uploadMysqlTables',
         function(callback, results) {
-            winston.warn('TODO: prune mysql tables');
-            callback();
+            var backupDir = results.getLocalMysqlDirectory,
+                todayYmd = results.getToday.split('-'),
+                thisMonth = todayYmd[1];
 
-            // if (dayNum != '01') {
+            winston.info('Pruning backups in %s older than 1 month and not from the 1st...', backupDir);
 
-            //     winston.info("Erasing %s.*-%s.sql.bz2", database, dayNum);
-            //         cp.exec('rm '+backupDir+'/'+database+".*-"+dayNum+".sql.bz2", function(error, stdout, stderr) {
-            //         if (stderr) {
-            //             winston.info(stderr);
-            //         }
-            //     });
-            // }
+            fs.readdir(backupDir, function(error, directories) {
+                async.eachOfLimit(directories, 5, function(directory, i, callback) {
+                    var ymd = directory.split('-');
+
+                    if (ymd[2] == '01' || ymd[1] == thisMonth) {
+                        return callback();
+                    }
+
+                    winston.info('Pruning %s', directory);
+                    child_process.exec('rm -R '+backupDir+'/'+directory, function(error, stdout, stderr) {
+                        if (stderr) {
+                            winston.error(stderr);
+                        }
+
+                        callback(error);
+                    });
+                }, callback);
+            });
         }
     ]
 
