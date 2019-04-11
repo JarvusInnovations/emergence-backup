@@ -250,7 +250,7 @@ async.auto({
         'getEmergenceConfig',
         function(callback, results) {
             var serviceConfig = results.getEmergenceConfig.services.plugins.sql,
-                ignoreSchemas = ['mysql', 'information_schema', 'performance_schema'],
+                ignoreSchemas = ['information_schema', 'performance_schema'],
                 mysqlCmd = ['mysql'];
 
             if (config.mysql && config.mysql.ignoreSchemas) {
