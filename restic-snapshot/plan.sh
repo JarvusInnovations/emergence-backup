@@ -3,12 +3,13 @@ pkg_origin=emergence
 pkg_version="1.0"
 pkg_maintainer="Chris Alfano <chris@jarv.us>"
 pkg_license=("MIT")
+pkg_upstream_url="https://github.com/JarvusInnovations/emergence-backup"
 
 pkg_deps=(
   core/bash
   core/jq-static
   core/mysql-client
-  core/restic
+  jarvus/restic
 )
 
 pkg_bin_dirs=(bin)
