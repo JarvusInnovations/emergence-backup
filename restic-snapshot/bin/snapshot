@@ -15,15 +15,15 @@ restic backup /emergence \
 
 # snapshot each site to its own host
 for site_path in /emergence/sites/*; do
-site_name=$(basename ${site_path})
+    site_name=$(basename ${site_path})
 
->&2 echo -e "\n==> snapshot site: ${site_name} @ ${site_path}"
+    >&2 echo -e "\n==> snapshot site: ${site_name} @ ${site_path}"
 
-restic backup "${site_path}/" \
-    --host="${site_name}" \
-    --exclude='*.log' \
-    --exclude='/emergence/sites/*/logs/**' \
-    --exclude='/emergence/sites/**/media/*x*/**'
+    restic backup "${site_path}/" \
+        --host="${site_name}" \
+        --exclude='*.log' \
+        --exclude='/emergence/sites/*/logs/**' \
+        --exclude='/emergence/sites/**/media/*x*/**'
 done
 
 # setup mysql
@@ -54,20 +54,20 @@ databases=$(mysql_query 'SELECT schema_name FROM information_schema.schemata WHE
 
 for db_name in $databases; do
 
-if [ -d "/emergence/sites/${db_name}" ]; then
-    cd "/emergence/sites/${db_name}"
-else
-    cd "/tmp"
-fi
+    if [ -d "/emergence/sites/${db_name}" ]; then
+        cd "/emergence/sites/${db_name}"
+    else
+        cd "/tmp"
+    fi
 
-mysql_dump "${db_name}" \
-    | restic backup \
-        --host="${db_name}" \
-        --stdin \
-        --stdin-filename="database.sql"
+    mysql_dump "${db_name}" \
+        | restic backup \
+            --host="${db_name}" \
+            --stdin \
+            --stdin-filename="database.sql"
 
-# restic de-dupe not as effective
-#    | /bin/gzip --rsyncable \
+    # restic de-dupe not as effective
+    #    | /bin/gzip --rsyncable \
 done
 
 # thin out snapshots
