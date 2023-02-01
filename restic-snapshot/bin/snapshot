@@ -5,6 +5,12 @@ HOME=/root
 source /etc/restic.env
 set +a
 
+# load optional explicit sites list
+if [ -f '/etc/emergence-backup-sites' ]; then
+    >&2 echo -e "\n==> loading explicit sites list from /etc/emergence-backup-sites"
+    sites_list_override="$(cat /etc/emergence-backup-sites)"
+fi
+
 # snapshot host config to _
 >&2 echo -e "\n==> snapshot host"
 
@@ -14,7 +20,13 @@ restic backup /emergence \
     --exclude='/emergence/sites/**'
 
 # snapshot each site to its own host
-for site_path in /emergence/sites/*; do
+if [ -n "${sites_list_override}" ]; then
+    site_paths="$(echo "${sites_list_override}" | sed 's/^/\/emergence\/sites\//')"
+else
+    site_paths="$(find /emergence/sites -mindepth 1 -maxdepth 1 -type d)"
+fi
+
+for site_path in $site_paths; do
     site_name=$(basename ${site_path})
 
     >&2 echo -e "\n==> snapshot site: ${site_name} @ ${site_path}"
@@ -50,7 +62,11 @@ mysql_dump() {
 }
 
 # dump each database+table
-databases=$(mysql_query 'SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ("information_schema", "mysql", "performance_schema")')
+if [ -n "${sites_list_override}" ]; then
+    databases="${sites_list_override}"
+else
+    databases=$(mysql_query 'SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ("information_schema", "mysql", "performance_schema")')
+fi
 
 for db_name in $databases; do
 
